@@ -53,3 +53,37 @@
 ```bash
 git clone https://github.com/your-username/telegram-event-bot.git
 cd telegram-event-bot
+
+### 2. Создайте виртуальное окружение
+```bash
+python3 -m venv venv
+source venv/bin/activate  # Linux/Mac
+# или
+venv\Scripts\activate     # Windows
+
+### 3. Установите зависимости
+bash
+pip install -r requirements.txt
+
+### 4. Создайте .env файл
+Создайте файл .env в корневой папке проекта со следующей структурой:
+
+env
+# ==================== НАСТРОЙКИ TELEGRAM ====================
+BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz  # Токен бота от @BotFather
+MASTER_ID=123456789                               # Ваш Telegram ID
+
+# ==================== НАСТРОЙКИ GOOGLE SHEETS ====================
+SHEET_ID=1AbCdEfGhIjKlMnOpQrStUvWxYz              # ID таблицы из URL
+CREDENTIALS_FILE=credentials.json                 # Файл с ключом сервисного аккаунта
+
+# Названия листов в таблице
+ADMINS_SHEET=Admins                               # Лист с ролями пользователей
+REGISTRATIONS_SHEET=Registrations                 # Лист с регистрациями
+ADMIN_LIMITS_SHEET=AdminLimits                   # Лист с лимитами
+
+# ==================== НАСТРОЙКИ МЕРОПРИЯТИЯ ====================
+EVENT_NAME=Конференция 2026                      # Название мероприятия
+EVENT_DATE=30 июля 2026                          # Дата проведения
+EVENT_LOCATION=Москва, Крокус Экспо              # Место проведения
+EVENT_MAX_PARTICIPANTS=400                       # Максимальное количество мест
