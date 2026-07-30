@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Сканер</title>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -73,7 +72,7 @@
     <button id="restartBtn" class="btn" style="display: none;">🔄 Сканировать снова</button>
 
     <script>
-        // Подключаем библиотеку для сканирования (используем html5-qrcode)
+        // Подключаем библиотеку для сканирования
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
         script.onload = initScanner;
@@ -99,7 +98,6 @@
                     html5QrCode = null;
                 }
 
-                // Создаём сканер
                 html5QrCode = new Html5Qrcode("reader");
 
                 const config = {
@@ -142,20 +140,22 @@
                 statusEl.textContent = '✅ QR распознан!';
                 statusEl.style.color = '#6bcb77';
 
-                // Отправляем результат в Telegram
-                const data = {
-                    qr_data: decodedText,
-                    timestamp: Date.now()
-                };
-
-                // Отправляем боту через WebApp
-                const data = {
-                    qr_data: decodedText,
-                    timestamp: Date.now()
-                };
-                window.Telegram.WebApp.sendData(JSON.stringify(data));
+                // Проверяем, что мы в Telegram
+                if (window.Telegram && window.Telegram.WebApp) {
+                    // Отправляем данные в бота
+                    const data = {
+                        qr_data: decodedText,
+                        timestamp: Date.now()
+                    };
                     
-                    // Закрываем приложение через 2 секунды
+                    try {
+                        window.Telegram.WebApp.sendData(JSON.stringify(data));
+                        console.log('✅ Данные отправлены:', data);
+                    } catch (e) {
+                        console.error('❌ Ошибка отправки:', e);
+                    }
+                    
+                    // Закрываем приложение через 1.5 секунды
                     setTimeout(() => {
                         window.Telegram.WebApp.close();
                     }, 1500);
@@ -168,24 +168,20 @@
             }
 
             function onScanError(err) {
-                // Игнорируем обычные ошибки сканирования (это нормально, пока камера ищет)
                 if (err && err.includes('NotFoundException')) return;
                 if (isScanning) {
                     console.log('Scan error:', err);
                 }
             }
 
-            // Кнопка перезапуска
             restartBtn.addEventListener('click', () => {
                 restartBtn.style.display = 'none';
                 startScanner();
             });
 
-            // Запускаем сканер при загрузке
             startScanner();
         }
 
-        // Обработка ошибок, если библиотека не загрузилась
         setTimeout(() => {
             if (!window.Html5Qrcode) {
                 document.getElementById('status').textContent = '❌ Ошибка загрузки сканера. Проверьте интернет.';
