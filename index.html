@@ -8,7 +8,7 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
-            padding: 0;
+            padding: 20px;
             background: #0a0a0f;
             display: flex;
             flex-direction: column;
@@ -24,7 +24,6 @@
             overflow: hidden;
             background: #1a1a2e;
             border: 2px solid #ff6b6b;
-            position: relative;
         }
         #reader video {
             width: 100% !important;
@@ -46,21 +45,36 @@
             padding: 14px 40px;
             border: none;
             border-radius: 12px;
-            background: #ff6b6b;
-            color: #fff;
             font-size: 18px;
             font-weight: 600;
             cursor: pointer;
             transition: 0.3s;
         }
+        .btn-primary {
+            background: #ff6b6b;
+            color: #fff;
+        }
+        .btn-success {
+            background: #6bcb77;
+            color: #fff;
+        }
         .btn:hover {
-            background: #e05a5a;
             transform: scale(1.05);
         }
         .btn:disabled {
             opacity: 0.4;
             cursor: not-allowed;
             transform: none;
+        }
+        .data-box {
+            margin-top: 16px;
+            padding: 12px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            max-width: 320px;
+            word-break: break-all;
+            font-size: 14px;
+            color: #ffd93d;
         }
     </style>
 </head>
@@ -69,148 +83,119 @@
     <p style="color: #aaa; margin-top: 0; font-size: 14px;">Наведите на QR-код</p>
     <div id="reader"></div>
     <div id="status">⏳ Загрузка камеры...</div>
-    <button id="restartBtn" class="btn" style="display: none;">🔄 Сканировать снова</button>
+    <div id="resultBox" class="data-box" style="display: none;"></div>
+    <button id="restartBtn" class="btn btn-primary" style="display: none;">🔄 Сканировать снова</button>
+    <button id="copyBtn" class="btn btn-success" style="display: none;">📋 Копировать данные</button>
 
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script>
-        // Подключаем библиотеку для сканирования
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
-        script.onload = initScanner;
-        document.head.appendChild(script);
-
         let html5QrCode = null;
         let isScanning = false;
+        let lastDecodedText = '';
 
-        function initScanner() {
+        function startScanner() {
             const statusEl = document.getElementById('status');
             const restartBtn = document.getElementById('restartBtn');
+            const copyBtn = document.getElementById('copyBtn');
+            const resultBox = document.getElementById('resultBox');
 
-            // Проверяем, что мы в Telegram WebView
-            const isTelegram = window.Telegram !== undefined && window.Telegram.WebApp !== undefined;
-            if (isTelegram) {
-                window.Telegram.WebApp.ready();
-                window.Telegram.WebApp.expand();
+            if (html5QrCode) {
+                html5QrCode.clear();
+                html5QrCode = null;
             }
 
-            function startScanner() {
-                if (html5QrCode) {
-                    html5QrCode.clear();
-                    html5QrCode = null;
-                }
+            html5QrCode = new Html5Qrcode("reader");
 
-                html5QrCode = new Html5Qrcode("reader");
+            const config = {
+                fps: 15,
+                qrbox: { width: 240, height: 240 },
+                aspectRatio: 1.0
+            };
 
-                const config = {
-                    fps: 15,
-                    qrbox: { width: 240, height: 240 },
-                    aspectRatio: 1.0
-                };
+            statusEl.textContent = '📷 Запуск камеры...';
+            statusEl.style.color = '#ffd93d';
+            restartBtn.style.display = 'none';
+            copyBtn.style.display = 'none';
+            resultBox.style.display = 'none';
 
-                statusEl.textContent = '📷 Запуск камеры...';
-                statusEl.style.color = '#ffd93d';
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                function onScanSuccess(decodedText) {
+                    if (!isScanning) return;
+                    isScanning = false;
 
-                html5QrCode.start(
-                    { facingMode: "environment" },
-                    config,
-                    onScanSuccess,
-                    onScanError
-                ).then(() => {
-                    isScanning = true;
-                    statusEl.textContent = '✅ Камера активна. Наведите на QR.';
-                    statusEl.style.color = '#6bcb77';
-                    restartBtn.style.display = 'none';
-                }).catch((err) => {
-                    console.error('Ошибка камеры:', err);
-                    statusEl.textContent = '❌ Не удалось запустить камеру: ' + (err.message || 'проверьте разрешения');
-                    statusEl.style.color = '#ff6b6b';
-                    restartBtn.style.display = 'block';
-                    restartBtn.textContent = '🔄 Попробовать снова';
-                });
-            }
-
-            function onScanSuccess(decodedText) {
-                if (!isScanning) return;
-                isScanning = false;
-
-                // Останавливаем сканер
-                if (html5QrCode) {
-                    html5QrCode.stop().catch(() => {});
-                }
-
-                statusEl.textContent = '✅ QR распознан!';
-                statusEl.style.color = '#6bcb77';
-
-                // Проверяем, что мы в Telegram
-                if (window.Telegram && window.Telegram.WebApp) {
-                    // Отправляем данные в бота
-                    const data = {
-                        qr_data: decodedText,
-                        timestamp: Date.now()
-                    };
-                    
-                    try {
-                        window.Telegram.WebApp.sendData(JSON.stringify(data));
-                        console.log('✅ Данные отправлены:', data);
-                    } catch (e) {
-                        console.error('❌ Ошибка отправки:', e);
+                    if (html5QrCode) {
+                        html5QrCode.stop().catch(() => {});
                     }
-                    
-                    // Закрываем приложение через 1.5 секунды
-                    setTimeout(() => {
-                        window.Telegram.WebApp.close();
-                    }, 1500);
-                } else {
-                    // Если не в Telegram — показываем результат
-                    statusEl.innerHTML = `✅ Распознано: <strong>${decodedText}</strong>`;
+
+                    lastDecodedText = decodedText;
+                    statusEl.textContent = '✅ QR распознан!';
+                    statusEl.style.color = '#6bcb77';
+
+                    // Показываем результат
+                    resultBox.textContent = '📋 ' + decodedText;
+                    resultBox.style.display = 'block';
+                    copyBtn.style.display = 'block';
                     restartBtn.style.display = 'block';
                     restartBtn.textContent = '🔄 Сканировать снова';
-                }
-            }
 
-            function onScanError(err) {
-                if (err && err.includes('NotFoundException')) return;
-                if (isScanning) {
-                    console.log('Scan error:', err);
+                    // Пытаемся отправить в Telegram (если работает)
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        try {
+                            window.Telegram.WebApp.sendData(JSON.stringify({
+                                qr_data: decodedText,
+                                timestamp: Date.now()
+                            }));
+                            setTimeout(() => window.Telegram.WebApp.close(), 1500);
+                        } catch(e) {
+                            console.log('WebApp send error:', e);
+                        }
+                    }
+                },
+                function onScanError(err) {
+                    if (err && err.includes('NotFoundException')) return;
+                    if (isScanning) {
+                        console.log('Scan error:', err);
+                    }
                 }
-            }
-
-            restartBtn.addEventListener('click', () => {
-                restartBtn.style.display = 'none';
-                startScanner();
+            ).then(() => {
+                isScanning = true;
+                statusEl.textContent = '✅ Камера активна. Наведите на QR.';
+                statusEl.style.color = '#6bcb77';
+            }).catch((err) => {
+                statusEl.textContent = '❌ Ошибка камеры: ' + (err.message || 'проверьте разрешения');
+                statusEl.style.color = '#ff6b6b';
+                restartBtn.style.display = 'block';
+                restartBtn.textContent = '🔄 Попробовать снова';
             });
-
-            startScanner();
         }
 
-        setTimeout(() => {
-            if (!window.Html5Qrcode) {
-                document.getElementById('status').textContent = '❌ Ошибка загрузки сканера. Проверьте интернет.';
-                document.getElementById('status').style.color = '#ff6b6b';
+        // Копирование в буфер
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            if (lastDecodedText) {
+                navigator.clipboard.writeText(lastDecodedText).then(() => {
+                    alert('✅ Данные скопированы!\n\nВставьте их в бот командой /check_manual');
+                }).catch(() => {
+                    // Если clipboard не работает
+                    const textarea = document.createElement('textarea');
+                    textarea.value = lastDecodedText;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert('✅ Данные скопированы!\n\nВставьте их в бот командой /check_manual');
+                });
             }
-        }, 5000);
-    </script>
-<button onclick="testSend()" style="margin-top:20px; padding:14px 30px; background:#6bcb77; border:none; border-radius:12px; color:#fff; font-size:16px; font-weight:600;">
-    🧪 Отправить тест в бота
-</button>
+        });
 
-<script>
-function testSend() {
-    if (window.Telegram && window.Telegram.WebApp) {
-        const testData = {
-            qr_data: 'USER_Тестовый_Участник_EVENT_2026',
-            timestamp: Date.now()
-        };
-        try {
-            window.Telegram.WebApp.sendData(JSON.stringify(testData));
-            alert('✅ Данные отправлены!');
-            setTimeout(() => window.Telegram.WebApp.close(), 1000);
-        } catch(e) {
-            alert('❌ Ошибка: ' + e.message);
-        }
-    } else {
-        alert('❌ Не в Telegram WebApp');
-    }
-}
-</script>
+        // Перезапуск сканера
+        document.getElementById('restartBtn').addEventListener('click', function() {
+            startScanner();
+        });
+
+        // Автозапуск
+        startScanner();
+    </script>
 </body>
 </html>
