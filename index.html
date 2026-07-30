@@ -189,5 +189,28 @@
             }
         }, 5000);
     </script>
+<button onclick="testSend()" style="margin-top:20px; padding:14px 30px; background:#6bcb77; border:none; border-radius:12px; color:#fff; font-size:16px; font-weight:600;">
+    🧪 Отправить тест в бота
+</button>
+
+<script>
+function testSend() {
+    if (window.Telegram && window.Telegram.WebApp) {
+        const testData = {
+            qr_data: 'USER_Тестовый_Участник_EVENT_2026',
+            timestamp: Date.now()
+        };
+        try {
+            window.Telegram.WebApp.sendData(JSON.stringify(testData));
+            alert('✅ Данные отправлены!');
+            setTimeout(() => window.Telegram.WebApp.close(), 1000);
+        } catch(e) {
+            alert('❌ Ошибка: ' + e.message);
+        }
+    } else {
+        alert('❌ Не в Telegram WebApp');
+    }
+}
+</script>
 </body>
 </html>
