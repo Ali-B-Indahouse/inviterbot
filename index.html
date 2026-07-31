@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Сканер</title>
-    <!-- ✅ ПРАВИЛЬНОЕ ПОДКЛЮЧЕНИЕ SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
@@ -55,26 +54,12 @@
             cursor: pointer;
             transition: 0.3s;
         }
-        .btn:hover {
-            transform: scale(1.05);
-        }
-        .btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .hidden {
-            display: none;
-        }
-        .success {
-            color: #6bcb77;
-        }
-        .error {
-            color: #ff6b6b;
-        }
-        .warning {
-            color: #ffd93d;
-        }
+        .btn:hover { transform: scale(1.05); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .hidden { display: none; }
+        .success { color: #6bcb77; }
+        .error { color: #ff6b6b; }
+        .warning { color: #ffd93d; }
     </style>
 </head>
 <body>
@@ -93,9 +78,6 @@
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
-            console.log('✅ Telegram WebApp инициализирован');
-        } else {
-            console.warn('⚠️ Telegram WebApp не найден (возможно, открыто не через кнопку бота)');
         }
 
         function startScanner() {
@@ -156,32 +138,65 @@
         }
 
         function sendDataToBot(decodedText, statusEl, restartBtn) {
-            // Отправка через WebApp
+            // =====================================================
+            // 🔥 СПОСОБ 1: ЧЕРЕЗ TELEGRAM (не работает в вашем случае)
+            // =====================================================
             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
                 try {
                     const payload = JSON.stringify({
                         qr_data: decodedText,
                         timestamp: Date.now()
                     });
-                    
                     window.Telegram.WebApp.sendData(payload);
-                    statusEl.textContent = '✅ Отправлено в бота!';
-                    statusEl.style.color = '#6bcb77';
-                    
-                    setTimeout(() => {
-                        window.Telegram.WebApp.close();
-                    }, 800);
+                    statusEl.textContent = '✅ Отправлено через Telegram!';
+                    setTimeout(() => window.Telegram.WebApp.close(), 1000);
                     return;
                 } catch(e) {
-                    console.error('Ошибка sendData:', e);
+                    console.error('sendData error:', e);
                 }
             }
 
-            // Если sendData недоступен
-            statusEl.innerHTML = `✅ Распознано: <br><strong style="font-size:14px;color:#ffd93d;">${decodedText}</strong><br><br>⚠️ Не удалось отправить в бота.<br>Убедитесь, что открыли через кнопку в боте.`;
-            statusEl.style.color = '#ffd93d';
-            restartBtn.classList.remove('hidden');
-            restartBtn.textContent = '🔄 Попробовать снова';
+            // =====================================================
+            // 🔥 СПОСОБ 2: ЧЕРЕЗ HTTP (РАБОТАЕТ ВСЕГДА!)
+            // =====================================================
+            const BOT_TOKEN = 'ВАШ_ТОКЕН_БОТА';  // 👈 ВСТАВЬТЕ СВОЙ ТОКЕН
+            const CHAT_ID = 'ВАШ_CHAT_ID';       // 👈 ВСТАВЬТЕ СВОЙ ID
+            
+            const payload = {
+                qr_data: decodedText,
+                timestamp: Date.now()
+            };
+
+            // Отправляем через HTTP-запрос к боту
+            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: `/scan_result ${JSON.stringify(payload)}`,
+                    parse_mode: 'Markdown'
+                })
+            })
+            .then(response => {
+                if (response.ok) {
+                    statusEl.textContent = '✅ Отправлено через HTTP!';
+                    setTimeout(() => {
+                        if (window.Telegram && window.Telegram.WebApp) {
+                            window.Telegram.WebApp.close();
+                        }
+                    }, 1000);
+                } else {
+                    statusEl.textContent = '❌ Ошибка HTTP-отправки';
+                    statusEl.style.color = '#ff6b6b';
+                    restartBtn.classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('HTTP error:', error);
+                statusEl.textContent = '❌ Ошибка сети: ' + error.message;
+                statusEl.style.color = '#ff6b6b';
+                restartBtn.classList.remove('hidden');
+            });
         }
 
         document.getElementById('restartBtn').addEventListener('click', function() {
