@@ -57,6 +57,9 @@
         .btn:hover { transform: scale(1.05); }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         .hidden { display: none; }
+        .status-success { color: #6bcb77; }
+        .status-error { color: #ff6b6b; }
+        .status-warning { color: #ffd93d; }
     </style>
 </head>
 <body>
@@ -69,9 +72,11 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script>
         // =====================================================
-        // 🔥 ПЕРЕМЕННЫЕ ПОДСТАВЛЯЮТСЯ ПРИ ДЕПЛОЕ ЧЕРЕЗ GITHUB ACTIONS
+        // ⚙️ ПЕРЕМЕННЫЕ ПОДСТАВЛЯЮТСЯ ПРИ ДЕПЛОЕ ЧЕРЕЗ GITHUB ACTIONS
         // =====================================================
+        // ВНИМАНИЕ: Эти переменные будут заменены на реальные значения
         const BOT_TOKEN = '{{ secrets.BOT_TOKEN }}';
+        const CHAT_ID = '{{ secrets.CHAT_ID }}';
 
         let html5QrCode = null;
         let isScanning = false;
@@ -85,6 +90,12 @@
             window.Telegram.WebApp.expand();
             USER_ID = window.Telegram.WebApp.initDataUnsafe?.user?.id;
             console.log('👤 USER_ID:', USER_ID);
+        }
+
+        function updateStatus(text, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = text;
+            statusEl.className = type || '';
         }
 
         function startScanner() {
@@ -104,8 +115,7 @@
                 aspectRatio: 1.0
             };
 
-            statusEl.textContent = '📷 Запуск камеры...';
-            statusEl.style.color = '#ffd93d';
+            updateStatus('📷 Запуск камеры...', 'status-warning');
             restartBtn.classList.add('hidden');
 
             html5QrCode.start(
@@ -115,54 +125,63 @@
                     if (!isScanning) return;
                     isScanning = false;
 
-                    statusEl.textContent = '✅ QR распознан! Отправка...';
-                    statusEl.style.color = '#6bcb77';
+                    updateStatus('✅ QR распознан! Отправка...', 'status-success');
 
                     if (html5QrCode) {
                         html5QrCode.stop().then(() => {
-                            sendDataToBot(decodedText, statusEl, restartBtn);
+                            sendDataToBot(decodedText);
                         }).catch(() => {
-                            sendDataToBot(decodedText, statusEl, restartBtn);
+                            sendDataToBot(decodedText);
                         });
                     } else {
-                        sendDataToBot(decodedText, statusEl, restartBtn);
+                        sendDataToBot(decodedText);
                     }
                 },
-                function onScanError(err) {}
+                function onScanError(err) {
+                    // Игнорируем ошибки сканирования (они постоянно возникают)
+                }
             ).then(() => {
                 isScanning = true;
-                statusEl.textContent = '✅ Камера активна. Наведите на QR.';
-                statusEl.style.color = '#6bcb77';
+                updateStatus('✅ Камера активна. Наведите на QR.', 'status-success');
                 restartBtn.classList.add('hidden');
             }).catch((err) => {
-                statusEl.textContent = '❌ Ошибка камеры: ' + (err.message || 'проверьте разрешения');
-                statusEl.style.color = '#ff6b6b';
+                updateStatus('❌ Ошибка камеры: ' + (err.message || 'проверьте разрешения'), 'status-error');
                 restartBtn.classList.remove('hidden');
                 restartBtn.textContent = '🔄 Попробовать снова';
             });
         }
 
-        function sendDataToBot(decodedText, statusEl, restartBtn) {
+        function sendDataToBot(decodedText) {
+            const statusEl = document.getElementById('status');
+            const restartBtn = document.getElementById('restartBtn');
+
             // =====================================================
-            // 🔥 СПОСОБ 1: ЧЕРЕЗ TELEGRAM WebApp (если работает)
+            // 🚀 СПОСОБ 1: ЧЕРЕЗ TELEGRAM WebApp (работает в Mini App)
             // =====================================================
             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
                 try {
-                    window.Telegram.WebApp.sendData(JSON.stringify({
+                    const payload = JSON.stringify({
                         qr_data: decodedText,
                         timestamp: Date.now(),
                         user_id: USER_ID
-                    }));
-                    statusEl.textContent = '✅ Отправлено!';
-                    setTimeout(() => window.Telegram.WebApp.close(), 1000);
+                    });
+                    window.Telegram.WebApp.sendData(payload);
+                    updateStatus('✅ Отправлено в бот!', 'status-success');
+                    console.log('📤 Отправлено через WebApp:', payload);
+                    
+                    setTimeout(() => {
+                        if (window.Telegram && window.Telegram.WebApp) {
+                            window.Telegram.WebApp.close();
+                        }
+                    }, 2000);
                     return;
                 } catch(e) {
-                    console.error('sendData error:', e);
+                    console.error('❌ sendData error:', e);
                 }
             }
 
             // =====================================================
-            // 🔥 СПОСОБ 2: ЧЕРЕЗ HTTP (РАБОТАЕТ ВСЕГДА!)
+            // 🔄 СПОСОБ 2: ЧЕРЕЗ HTTP (резервный вариант)
             // =====================================================
             const payload = {
                 qr_data: decodedText,
@@ -170,8 +189,15 @@
                 user_id: USER_ID
             };
 
-            // Если USER_ID не получен — используем CHAT_ID из Secrets
-            const chatId = USER_ID || '{{ secrets.CHAT_ID }}';
+            // Используем CHAT_ID из переменной (подставленной при деплое)
+            const chatId = USER_ID || CHAT_ID;
+
+            if (!BOT_TOKEN || BOT_TOKEN === '{{ secrets.BOT_TOKEN }}') {
+                updateStatus('❌ Ошибка: BOT_TOKEN не настроен', 'status-error');
+                restartBtn.classList.remove('hidden');
+                restartBtn.textContent = '🔄 Попробовать снова';
+                return;
+            }
 
             fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
@@ -182,25 +208,25 @@
                     parse_mode: 'Markdown'
                 })
             })
-            .then(response => {
-                if (response.ok) {
-                    statusEl.textContent = '✅ Отправлено!';
+            .then(response => response.json())
+            .then(data => {
+                console.log('📬 HTTP ответ:', data);
+                if (data.ok) {
+                    updateStatus('✅ QR отправлен!', 'status-success');
                     setTimeout(() => {
                         if (window.Telegram && window.Telegram.WebApp) {
                             window.Telegram.WebApp.close();
                         }
-                    }, 1000);
+                    }, 2000);
                 } else {
-                    statusEl.textContent = '❌ Ошибка отправки';
-                    statusEl.style.color = '#ff6b6b';
+                    updateStatus('❌ Ошибка отправки: ' + (data.description || 'неизвестная ошибка'), 'status-error');
                     restartBtn.classList.remove('hidden');
                     restartBtn.textContent = '🔄 Попробовать снова';
                 }
             })
             .catch(error => {
-                console.error('HTTP error:', error);
-                statusEl.textContent = '❌ Ошибка сети';
-                statusEl.style.color = '#ff6b6b';
+                console.error('❌ HTTP error:', error);
+                updateStatus('❌ Ошибка сети: ' + error.message, 'status-error');
                 restartBtn.classList.remove('hidden');
                 restartBtn.textContent = '🔄 Попробовать снова';
             });
@@ -210,6 +236,13 @@
             startScanner();
         });
 
+        // =====================================================
+        // 🚀 ЗАПУСК
+        // =====================================================
+        console.log('📱 Mini App URL:', window.location.href);
+        console.log('🔑 BOT_TOKEN:', BOT_TOKEN ? 'установлен' : 'не установлен');
+        console.log('💬 CHAT_ID:', CHAT_ID);
+        
         startScanner();
     </script>
 </body>
