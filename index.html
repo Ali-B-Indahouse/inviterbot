@@ -57,9 +57,6 @@
         .btn:hover { transform: scale(1.05); }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         .hidden { display: none; }
-        .success { color: #6bcb77; }
-        .error { color: #ff6b6b; }
-        .warning { color: #ffd93d; }
     </style>
 </head>
 <body>
@@ -71,13 +68,23 @@
 
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script>
+        // =====================================================
+        // 🔥 ПЕРЕМЕННЫЕ ПОДСТАВЛЯЮТСЯ ПРИ ДЕПЛОЕ ЧЕРЕЗ GITHUB ACTIONS
+        // =====================================================
+        const BOT_TOKEN = '{{ secrets.BOT_TOKEN }}';
+
         let html5QrCode = null;
         let isScanning = false;
+        let USER_ID = null;
 
-        // Инициализация Telegram WebApp
+        // =====================================================
+        // 🔥 ПОЛУЧАЕМ ID ПОЛЬЗОВАТЕЛЯ ИЗ TELEGRAM
+        // =====================================================
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
+            USER_ID = window.Telegram.WebApp.initDataUnsafe?.user?.id;
+            console.log('👤 USER_ID:', USER_ID);
         }
 
         function startScanner() {
@@ -121,9 +128,7 @@
                         sendDataToBot(decodedText, statusEl, restartBtn);
                     }
                 },
-                function onScanError(err) {
-                    // Игнорируем
-                }
+                function onScanError(err) {}
             ).then(() => {
                 isScanning = true;
                 statusEl.textContent = '✅ Камера активна. Наведите на QR.';
@@ -139,16 +144,16 @@
 
         function sendDataToBot(decodedText, statusEl, restartBtn) {
             // =====================================================
-            // 🔥 СПОСОБ 1: ЧЕРЕЗ TELEGRAM (не работает в вашем случае)
+            // 🔥 СПОСОБ 1: ЧЕРЕЗ TELEGRAM WebApp (если работает)
             // =====================================================
             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
                 try {
-                    const payload = JSON.stringify({
+                    window.Telegram.WebApp.sendData(JSON.stringify({
                         qr_data: decodedText,
-                        timestamp: Date.now()
-                    });
-                    window.Telegram.WebApp.sendData(payload);
-                    statusEl.textContent = '✅ Отправлено через Telegram!';
+                        timestamp: Date.now(),
+                        user_id: USER_ID
+                    }));
+                    statusEl.textContent = '✅ Отправлено!';
                     setTimeout(() => window.Telegram.WebApp.close(), 1000);
                     return;
                 } catch(e) {
@@ -159,43 +164,45 @@
             // =====================================================
             // 🔥 СПОСОБ 2: ЧЕРЕЗ HTTP (РАБОТАЕТ ВСЕГДА!)
             // =====================================================
-            const BOT_TOKEN = 'ВАШ_ТОКЕН_БОТА';  // 👈 ВСТАВЬТЕ СВОЙ ТОКЕН
-            const CHAT_ID = 'ВАШ_CHAT_ID';       // 👈 ВСТАВЬТЕ СВОЙ ID
-            
             const payload = {
                 qr_data: decodedText,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                user_id: USER_ID
             };
 
-            // Отправляем через HTTP-запрос к боту
+            // Если USER_ID не получен — используем CHAT_ID из Secrets
+            const chatId = USER_ID || '{{ secrets.CHAT_ID }}';
+
             fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    chat_id: CHAT_ID,
+                    chat_id: chatId,
                     text: `/scan_result ${JSON.stringify(payload)}`,
                     parse_mode: 'Markdown'
                 })
             })
             .then(response => {
                 if (response.ok) {
-                    statusEl.textContent = '✅ Отправлено через HTTP!';
+                    statusEl.textContent = '✅ Отправлено!';
                     setTimeout(() => {
                         if (window.Telegram && window.Telegram.WebApp) {
                             window.Telegram.WebApp.close();
                         }
                     }, 1000);
                 } else {
-                    statusEl.textContent = '❌ Ошибка HTTP-отправки';
+                    statusEl.textContent = '❌ Ошибка отправки';
                     statusEl.style.color = '#ff6b6b';
                     restartBtn.classList.remove('hidden');
+                    restartBtn.textContent = '🔄 Попробовать снова';
                 }
             })
             .catch(error => {
                 console.error('HTTP error:', error);
-                statusEl.textContent = '❌ Ошибка сети: ' + error.message;
+                statusEl.textContent = '❌ Ошибка сети';
                 statusEl.style.color = '#ff6b6b';
                 restartBtn.classList.remove('hidden');
+                restartBtn.textContent = '🔄 Попробовать снова';
             });
         }
 
