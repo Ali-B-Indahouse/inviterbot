@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Сканер</title>
+    <!-- ✅ ПРАВИЛЬНОЕ ПОДКЛЮЧЕНИЕ SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -39,6 +41,7 @@
             min-height: 60px;
             text-align: center;
             max-width: 320px;
+            word-break: break-all;
         }
         .btn {
             margin-top: 20px;
@@ -63,6 +66,15 @@
         .hidden {
             display: none;
         }
+        .success {
+            color: #6bcb77;
+        }
+        .error {
+            color: #ff6b6b;
+        }
+        .warning {
+            color: #ffd93d;
+        }
     </style>
 </head>
 <body>
@@ -77,6 +89,15 @@
         let html5QrCode = null;
         let isScanning = false;
 
+        // Инициализация Telegram WebApp
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+            console.log('✅ Telegram WebApp инициализирован');
+        } else {
+            console.warn('⚠️ Telegram WebApp не найден (возможно, открыто не через кнопку бота)');
+        }
+
         function startScanner() {
             const statusEl = document.getElementById('status');
             const restartBtn = document.getElementById('restartBtn');
@@ -89,7 +110,7 @@
             html5QrCode = new Html5Qrcode("reader");
 
             const config = {
-                fps: 15,
+                fps: 10,
                 qrbox: { width: 240, height: 240 },
                 aspectRatio: 1.0
             };
@@ -105,39 +126,21 @@
                     if (!isScanning) return;
                     isScanning = false;
 
-                    if (html5QrCode) {
-                        html5QrCode.stop().catch(() => {});
-                    }
-
                     statusEl.textContent = '✅ QR распознан! Отправка...';
                     statusEl.style.color = '#6bcb77';
 
-                    // Пытаемся отправить в Telegram
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        try {
-                            window.Telegram.WebApp.sendData(JSON.stringify({
-                                qr_data: decodedText,
-                                timestamp: Date.now()
-                            }));
-                            statusEl.textContent = '✅ Отправлено!';
-                            setTimeout(() => window.Telegram.WebApp.close(), 1000);
-                            return;
-                        } catch(e) {
-                            console.error('Send error:', e);
-                        }
+                    if (html5QrCode) {
+                        html5QrCode.stop().then(() => {
+                            sendDataToBot(decodedText, statusEl, restartBtn);
+                        }).catch(() => {
+                            sendDataToBot(decodedText, statusEl, restartBtn);
+                        });
+                    } else {
+                        sendDataToBot(decodedText, statusEl, restartBtn);
                     }
-
-                    // Если не получилось отправить — показываем текст и кнопку
-                    statusEl.innerHTML = `✅ Распознано: <br><strong style="font-size:14px;color:#ffd93d;">${decodedText}</strong><br><br>⚠️ Не удалось отправить в бота.<br>Нажмите "Сканировать снова" и попробуйте ещё раз.`;
-                    statusEl.style.color = '#ffd93d';
-                    restartBtn.classList.remove('hidden');
-                    restartBtn.textContent = '🔄 Попробовать снова';
                 },
                 function onScanError(err) {
-                    if (err && err.includes('NotFoundException')) return;
-                    if (isScanning) {
-                        console.log('Scan error:', err);
-                    }
+                    // Игнорируем
                 }
             ).then(() => {
                 isScanning = true;
@@ -152,15 +155,38 @@
             });
         }
 
+        function sendDataToBot(decodedText, statusEl, restartBtn) {
+            // Отправка через WebApp
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
+                try {
+                    const payload = JSON.stringify({
+                        qr_data: decodedText,
+                        timestamp: Date.now()
+                    });
+                    
+                    window.Telegram.WebApp.sendData(payload);
+                    statusEl.textContent = '✅ Отправлено в бота!';
+                    statusEl.style.color = '#6bcb77';
+                    
+                    setTimeout(() => {
+                        window.Telegram.WebApp.close();
+                    }, 800);
+                    return;
+                } catch(e) {
+                    console.error('Ошибка sendData:', e);
+                }
+            }
+
+            // Если sendData недоступен
+            statusEl.innerHTML = `✅ Распознано: <br><strong style="font-size:14px;color:#ffd93d;">${decodedText}</strong><br><br>⚠️ Не удалось отправить в бота.<br>Убедитесь, что открыли через кнопку в боте.`;
+            statusEl.style.color = '#ffd93d';
+            restartBtn.classList.remove('hidden');
+            restartBtn.textContent = '🔄 Попробовать снова';
+        }
+
         document.getElementById('restartBtn').addEventListener('click', function() {
             startScanner();
         });
-
-        // Принудительно просим Telegram активировать WebApp
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
-        }
 
         startScanner();
     </script>
