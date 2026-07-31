@@ -13,8 +13,34 @@ jobs:
 
       - name: Replace secrets in index.html
         run: |
-          sed -i "s/{{ secrets.BOT_TOKEN }}/${{ secrets.BOT_TOKEN }}/g" index.html
-          sed -i "s/{{ secrets.CHAT_ID }}/${{ secrets.CHAT_ID }}/g" index.html
+          echo "🔑 Заменяем secrets в index.html..."
+          
+          # Заменяем маркеры на реальные значения из secrets
+          sed -i "s/__BOT_TOKEN__/${{ secrets.BOT_TOKEN }}/g" index.html
+          sed -i "s/__CHAT_ID__/${{ secrets.CHAT_ID }}/g" index.html
+          
+          echo ""
+          echo "📄 Проверяем результат замены:"
+          echo "----------------------------------------"
+          echo "🔍 BOT_TOKEN:"
+          grep -n "BOT_TOKEN" index.html | head -2
+          echo ""
+          echo "🔍 CHAT_ID:"
+          grep -n "CHAT_ID" index.html | head -2
+          echo "----------------------------------------"
+          
+          # Проверяем, что маркеры действительно заменились
+          if grep -q "__BOT_TOKEN__" index.html; then
+            echo "❌ ОШИБКА: BOT_TOKEN не заменился!"
+            exit 1
+          fi
+          
+          if grep -q "__CHAT_ID__" index.html; then
+            echo "❌ ОШИБКА: CHAT_ID не заменился!"
+            exit 1
+          fi
+          
+          echo "✅ Все secrets успешно заменены!"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -22,3 +48,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./
           publish_branch: gh-pages
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'Deploy to GitHub Pages'
