@@ -1,319 +1,102 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Сканер</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-        #video-container {
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            aspect-ratio: 1/1;
-            background: #000;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 2px solid #333;
-        }
-        #video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        #overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-        #overlay .corner {
-            position: absolute;
-            width: 40px;
-            height: 40px;
-            border-color: #00ff00;
-            border-style: solid;
-            border-width: 0;
-        }
-        #overlay .corner.tl {
-            top: 20px;
-            left: 20px;
-            border-top-width: 4px;
-            border-left-width: 4px;
-        }
-        #overlay .corner.tr {
-            top: 20px;
-            right: 20px;
-            border-top-width: 4px;
-            border-right-width: 4px;
-        }
-        #overlay .corner.bl {
-            bottom: 20px;
-            left: 20px;
-            border-bottom-width: 4px;
-            border-left-width: 4px;
-        }
-        #overlay .corner.br {
-            bottom: 20px;
-            right: 20px;
-            border-bottom-width: 4px;
-            border-right-width: 4px;
-        }
-        #overlay .center-line {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 60%;
-            height: 2px;
-            background: rgba(0, 255, 0, 0.3);
-            animation: scanLine 2s infinite;
-        }
-        @keyframes scanLine {
-            0% { top: 20%; }
-            50% { top: 80%; }
-            100% { top: 20%; }
-        }
-        #status {
-            color: #fff;
-            font-size: 16px;
-            margin-top: 20px;
-            text-align: center;
-            padding: 12px 20px;
-            background: rgba(0,0,0,0.8);
-            border-radius: 12px;
-            min-height: 50px;
-            max-width: 90%;
-            border: 1px solid #333;
-            transition: all 0.3s;
-        }
-        #status.loading { color: #ffaa00; border-color: #ffaa00; }
-        #status.success { color: #00ff00; border-color: #00ff00; }
-        #status.error { color: #ff4444; border-color: #ff4444; }
-        #status.info { color: #66ccff; border-color: #66ccff; }
-        #controls {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        button {
-            padding: 12px 24px;
-            font-size: 15px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            background: #4CAF50;
-            color: white;
-            font-weight: 500;
-            min-width: 120px;
-            transition: opacity 0.2s;
-        }
-        button:hover { opacity: 0.85; }
-        button.secondary { background: #f44336; }
-        button.primary { background: #4CAF50; }
-        button.info { background: #2196F3; }
-        .hidden { display: none !important; }
-        .error-text { color: #ff4444; font-size: 14px; margin-top: 10px; }
+        body { font-family: -apple-system, sans-serif; margin: 0; padding: 20px; background: #1a1a1a; color: white; }
+        #reader { width: 100%; max-width: 400px; margin: 0 auto; }
+        .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; }
+        .btn-primary { background: #2481cc; color: white; }
+        .btn-danger { background: #cc3333; color: white; }
+        #status { text-align: center; margin: 15px 0; font-size: 14px; color: #aaa; }
     </style>
 </head>
 <body>
-    <!-- Статус -->
-    <div id="status" class="loading">📸 Запрос камеры...</div>
-    
-    <!-- Видео для сканирования -->
-    <div id="video-container" class="hidden">
-        <video id="video" autoplay playsinline></video>
-        <div id="overlay">
-            <div class="corner tl"></div>
-            <div class="corner tr"></div>
-            <div class="corner bl"></div>
-            <div class="corner br"></div>
-            <div class="center-line"></div>
-        </div>
-    </div>
-    
-    <!-- Кнопки управления -->
-    <div id="controls" class="hidden">
-        <button class="primary" onclick="restartScanner()">🔄 Повторить</button>
-        <button class="info" onclick="flashToggle()">💡 Подсветка</button>
-        <button class="secondary" onclick="closeApp()">❌ Закрыть</button>
-    </div>
+    <h2 style="text-align:center;">📸 QR Сканер</h2>
+    <div id="reader"></div>
+    <div id="status">Запуск камеры...</div>
+    <button class="btn btn-danger" onclick="closeApp()">❌ Закрыть</button>
 
     <script>
-        // ============================================================
-        // 📱 ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP
-        // ============================================================
-        const Telegram = window.Telegram.WebApp;
-        Telegram.ready();
-        Telegram.expand();
-        
-        // ============================================================
-        // 📸 СКАНЕР QR
-        // ============================================================
-        let stream = null;
-        let scanning = false;
-        let flashEnabled = false;
-        let videoTrack = null;
-        
-        function updateStatus(text, type = 'loading') {
-            const status = document.getElementById('status');
-            status.textContent = text;
-            status.className = type;
-        }
-        
-        function showScanner() {
-            document.getElementById('video-container').classList.remove('hidden');
-            document.getElementById('controls').classList.remove('hidden');
-        }
-        
-        // ✅ ОТПРАВКА ДАННЫХ ЧЕРЕЗ WEBAPP (БЕЗ ТОКЕНА!)
-        function sendViaWebApp(qrData) {
-            try {
-                updateStatus('📤 Отправка данных...', 'info');
-                
-                Telegram.sendData(JSON.stringify({
-                    action: 'scan',
-                    qr_data: qrData
-                }));
-                
-                updateStatus('✅ Данные отправлены!', 'success');
-                setTimeout(() => Telegram.close(), 1500);
-            } catch (error) {
-                updateStatus('❌ Ошибка: ' + error.message, 'error');
-            }
-        }
-        
-        // Включение/выключение подсветки
-        async function flashToggle() {
-            if (!videoTrack) return;
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        let html5QrCode = null;
+        let isScanning = false;
+
+        function startScanner() {
+            document.getElementById('status').innerText = '🔄 Запуск камеры...';
             
-            try {
-                flashEnabled = !flashEnabled;
-                await videoTrack.applyConstraints({
-                    advanced: [{ torch: flashEnabled }]
-                });
-                updateStatus(flashEnabled ? '💡 Подсветка включена' : '💡 Подсветка выключена', 'info');
-                setTimeout(() => {
-                    if (scanning) updateStatus('📸 Сканирование...', 'loading');
-                }, 1000);
-            } catch (error) {
-                updateStatus('❌ Подсветка недоступна', 'error');
-            }
-        }
-        
-        // Запуск сканера
-        async function startScanner() {
-            const video = document.getElementById('video');
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
+            html5QrCode = new Html5Qrcode("reader");
             
-            try {
-                const constraints = {
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 640 },
-                        height: { ideal: 640 }
-                    }
-                };
-                
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-                videoTrack = stream.getVideoTracks()[0];
-                video.srcObject = stream;
-                await video.play();
-                
-                showScanner();
-                updateStatus('📸 Сканирование...', 'loading');
-                scanning = true;
-                
-                const scanLoop = () => {
-                    if (!scanning) return;
+            Html5Qrcode.getCameras().then(devices => {
+                if (devices && devices.length) {
+                    // Ищем заднюю камеру
+                    const cameraId = devices.find(d => /back|rear|environment/i.test(d.label))?.id || devices[devices.length - 1].id;
                     
-                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        
-                        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                        const code = jsQR(imageData.data, imageData.width, imageData.height);
-                        
-                        if (code) {
-                            const qrData = code.data;
-                            updateStatus('✅ QR найден!', 'success');
-                            
-                            scanning = false;
-                            if (stream) {
-                                stream.getTracks().forEach(track => track.stop());
-                            }
-                            
-                            // Отправляем через WebApp (без токена!)
-                            sendViaWebApp(qrData);
-                            return;
-                        }
-                    }
-                    requestAnimationFrame(scanLoop);
-                };
+                    html5QrCode.start(
+                        cameraId,
+                        { fps: 10, qrbox: { width: 250, height: 250 } },
+                        onScanSuccess
+                    ).then(() => {
+                        isScanning = true;
+                        document.getElementById('status').innerText = '📷 Наведите на QR-код';
+                    }).catch(err => {
+                        document.getElementById('status').innerText = '❌ Ошибка камеры: ' + err;
+                    });
+                } else {
+                    document.getElementById('status').innerText = '❌ Камера не найдена';
+                }
+            }).catch(err => {
+                document.getElementById('status').innerText = '❌ ' + err;
+            });
+        }
+
+        function onScanSuccess(decodedText) {
+            if (!isScanning) return;
+            isScanning = false;
+            
+            document.getElementById('status').innerText = '✅ Считано: ' + decodedText;
+            
+            // 🔑 ОТПРАВКА ДАННЫХ В БОТА — САМОЕ ВАЖНОЕ!
+            const payload = JSON.stringify({
+                action: 'scan',
+                qr_data: decodedText
+            });
+            
+            console.log('📤 Отправляем в бота:', payload);
+            
+            try {
+                tg.sendData(payload);
+                document.getElementById('status').innerText = '📤 Данные отправлены боту...';
                 
-                scanLoop();
-            } catch (error) {
-                updateStatus('❌ Ошибка камеры: ' + error.message, 'error');
-                console.error('Camera error:', error);
+                // Останавливаем сканер
+                if (html5QrCode && isScanning) {
+                    html5QrCode.stop().catch(e => console.error(e));
+                }
+                
+                // Закрываем Mini App через 1.5 сек
+                setTimeout(() => tg.close(), 1500);
+            } catch (e) {
+                document.getElementById('status').innerText = '❌ Ошибка отправки: ' + e;
+                console.error(e);
             }
         }
-        
-        function restartScanner() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            scanning = false;
-            flashEnabled = false;
-            updateStatus('🔄 Перезапуск...', 'info');
-            setTimeout(() => startScanner(), 500);
-        }
-        
+
         function closeApp() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop().catch(e => console.error(e));
             }
-            scanning = false;
-            Telegram.close();
+            tg.close();
         }
-        
-        // Обработка ошибок в WebApp
-        Telegram.onEvent('viewportChanged', function() {
-            // Можно добавить логику при изменении размера
-        });
-        
-        // ============================================================
-        // 🚀 СТАРТ
-        // ============================================================
-        updateStatus('📸 Запрос камеры...', 'loading');
-        setTimeout(startScanner, 500);
-        
-        // Обработка ошибок
-        window.onerror = function(msg, url, line, col, error) {
-            updateStatus('❌ Ошибка: ' + msg, 'error');
-            console.error('Error:', msg, error);
-        };
+
+        // Запуск при загрузке
+        startScanner();
     </script>
 </body>
 </html>
