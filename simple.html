@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <h1>🧪 ТЕСТОВЫЙ СКАНЕР</h1>
+    
+    <div style="padding: 20px;">
+        <button onclick="sendData()" style="
+            padding: 30px;
+            font-size: 24px;
+            background: #0088cc;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            width: 100%;
+            cursor: pointer;
+        ">
+            📤 ОТПРАВИТЬ ДАННЫЕ
+        </button>
+        
+        <div id="status" style="
+            margin-top: 20px;
+            padding: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            font-size: 16px;
+        ">
+            Статус: Готов
+        </div>
+        
+        <button onclick="closeApp()" style="
+            margin-top: 20px;
+            padding: 15px;
+            font-size: 18px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            width: 100%;
+            cursor: pointer;
+        ">
+            ❌ Закрыть
+        </button>
+    </div>
+
+    <script>
+        console.log('=== СКРИПТ ЗАГРУЖЕН ===');
+        
+        // Получаем объект Telegram
+        const Telegram = window.Telegram.WebApp;
+        console.log('Telegram.WebApp:', Telegram);
+        
+        // Сообщаем что готовы
+        Telegram.ready();
+        console.log('Telegram готов');
+        
+        function sendData() {
+            const status = document.getElementById('status');
+            
+            // Тестовые данные
+            const testData = {
+                qr_data: "USER_Test_Ivanov_EVENT_2026"
+            };
+            
+            console.log('Отправка данных:', testData);
+            status.innerHTML = '📤 Отправка...';
+            
+            try {
+                // Отправляем через Telegram
+                Telegram.sendData(JSON.stringify(testData));
+                console.log('✅ Данные отправлены через Telegram');
+                status.innerHTML = '✅ Данные отправлены!';
+                
+                // Пробуем также через HTTP запрос (запасной вариант)
+                sendViaHTTP(testData);
+                
+                // Закрываем через 2 секунды
+                setTimeout(() => {
+                    console.log('Закрываем WebApp');
+                    Telegram.close();
+                }, 2000);
+                
+            } catch (error) {
+                console.error('❌ Ошибка:', error);
+                status.innerHTML = `❌ Ошибка: ${error.message}`;
+            }
+        }
+        
+        function sendViaHTTP(data) {
+            // Запасной способ - отправка через HTTP
+            console.log('Пробуем отправить через HTTP...');
+            
+            fetch('https://api.telegram.org/bot8983296641:AAE0RnwlDvzp1QefKZAqmYtzJnKPrvwR-BA/sendMessage', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: '313194397',
+                    text: `/scan_result ${JSON.stringify(data)}`
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                console.log('✅ HTTP отправка успешна:', result);
+                document.getElementById('status').innerHTML += '<br>✅ HTTP: успешно';
+            })
+            .catch(error => {
+                console.error('❌ HTTP ошибка:', error);
+                document.getElementById('status').innerHTML += `<br>❌ HTTP: ${error.message}`;
+            });
+        }
+        
+        function closeApp() {
+            console.log('Закрываем WebApp');
+            Telegram.close();
+        }
+        
+        // Дополнительный лог при закрытии
+        Telegram.onEvent('viewportChanged', function() {
+            console.log('Viewport изменился');
+        });
+        
+        console.log('=== СКРИПТ ЗАВЕРШИЛ ЗАГРУЗКУ ===');
+    </script>
+</body>
+</html>
