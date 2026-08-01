@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест сканера</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <h1>📸 Тест сканера</h1>
+    
+    <div style="padding: 20px;">
+        <button onclick="sendTestData()" style="
+            padding: 20px;
+            font-size: 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            width: 100%;
+            cursor: pointer;
+        ">
+            📤 Отправить тестовый QR
+        </button>
+    </div>
+
+    <div id="status" style="
+        padding: 20px;
+        margin: 10px;
+        background: #f0f0f0;
+        border-radius: 10px;
+        font-family: monospace;
+    ">
+        Ожидание...
+    </div>
+
+    <script>
+        const Telegram = window.Telegram.WebApp;
+        const BOT_TOKEN = '8983296641:AAE0RnwlDvzp1QefKZAqmYtzJnKPrvwR-BA';
+        const CHAT_ID = '313194397';
+        
+        function sendTestData() {
+            const testData = "USER_Test_User_EVENT_2026";
+            const status = document.getElementById('status');
+            
+            status.innerHTML = '📤 Отправка данных...';
+            
+            try {
+                // Способ 1: через Telegram WebApp
+                Telegram.sendData(JSON.stringify({ qr_data: testData }));
+                status.innerHTML = '✅ Отправлено через Telegram!';
+                
+                // Способ 2: через HTTP (альтернатива)
+                sendViaHTTP(testData);
+                
+                // Закрываем через 2 секунды
+                setTimeout(() => {
+                    Telegram.close();
+                }, 2000);
+                
+            } catch (error) {
+                status.innerHTML = `❌ Ошибка: ${error.message}`;
+                console.error('Ошибка:', error);
+            }
+        }
+        
+        function sendViaHTTP(qrData) {
+            // Альтернативный способ отправки
+            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: `/scan_result ${JSON.stringify({ qr_data: qrData })}`
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('HTTP отправка успешна:', data);
+            })
+            .catch(error => {
+                console.error('HTTP ошибка:', error);
+            });
+        }
+        
+        // Инициализация
+        Telegram.ready();
+        document.getElementById('status').innerHTML = '✅ Готов к работе!';
+    </script>
+</body>
+</html>
