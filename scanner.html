@@ -30,6 +30,7 @@
             background: #2a2a2a;
             border-radius: 10px;
             font-size: 14px;
+            word-break: break-all;
         }
         .btn {
             display: block;
@@ -48,6 +49,19 @@
         .btn-danger { background: #cc3333; color: white; }
         .btn-primary { background: #2481cc; color: white; }
         .btn-secondary { background: #555; color: white; }
+        .log-area {
+            background: #0a0a0a;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -65,8 +79,12 @@
         ❌ Закрыть
     </button>
 
+    <div class="log-area" id="log"></div>
+
     <script>
-        // Инициализация Telegram WebApp
+        // ============================================================
+        // 📱 ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP
+        // ============================================================
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
@@ -75,13 +93,26 @@
         tg.setHeaderColor('#1a1a1a');
         tg.setBackgroundColor('#1a1a1a');
 
+        // Логирование в статус и в лог-область
+        function addLog(msg, isStatus = true) {
+            console.log(msg);
+            const logDiv = document.getElementById('log');
+            logDiv.textContent += msg + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
+            if (isStatus) {
+                document.getElementById('status').innerText = msg;
+            }
+        }
+
         let html5QrCode = null;
         let isScanning = false;
         let torchEnabled = false;
 
-        // Запуск сканера
+        // ============================================================
+        // ЗАПУСК СКАНЕРА
+        // ============================================================
         function startScanner() {
-            document.getElementById('status').innerText = '🔄 Запуск камеры...';
+            addLog('🔄 Запуск камеры...');
             
             html5QrCode = new Html5Qrcode("reader");
             
@@ -89,6 +120,7 @@
                 if (devices && devices.length) {
                     // Ищем заднюю камеру
                     const cameraId = devices.find(d => /back|rear|environment/i.test(d.label))?.id || devices[devices.length - 1].id;
+                    addLog(`📷 Используем камеру: ${cameraId}`);
                     
                     html5QrCode.start(
                         cameraId,
@@ -101,29 +133,30 @@
                         onScanFailure
                     ).then(() => {
                         isScanning = true;
-                        document.getElementById('status').innerText = '📷 Наведите камеру на QR-код';
+                        addLog('📷 Наведите камеру на QR-код');
                         document.getElementById('torchBtn').style.display = 'block';
                         document.getElementById('restartBtn').style.display = 'none';
                     }).catch(err => {
-                        document.getElementById('status').innerText = '❌ Ошибка камеры: ' + err;
+                        addLog('❌ Ошибка камеры: ' + err);
                         console.error('Camera error:', err);
                     });
                 } else {
-                    document.getElementById('status').innerText = '❌ Камера не найдена';
+                    addLog('❌ Камера не найдена');
                 }
             }).catch(err => {
-                document.getElementById('status').innerText = '❌ ' + err;
+                addLog('❌ ' + err);
                 console.error('Get cameras error:', err);
             });
         }
 
-        // Успешное сканирование
+        // ============================================================
+        // УСПЕШНОЕ СКАНИРОВАНИЕ
+        // ============================================================
         function onScanSuccess(decodedText, decodedResult) {
             if (!isScanning) return;
             isScanning = false;
             
-            console.log('✅ QR распознан:', decodedText);
-            document.getElementById('status').innerText = '✅ Считано: ' + decodedText;
+            addLog(`✅ QR распознан: ${decodedText}`);
             
             // Останавливаем сканер
             if (html5QrCode) {
@@ -134,17 +167,19 @@
                 });
             }
             
-            // 🔑 ОТПРАВКА ДАННЫХ В БОТА - САМОЕ ВАЖНОЕ!
+            // ============================================================
+            // 🔑 ОТПРАВКА ДАННЫХ В БОТА
+            // ============================================================
             const payload = JSON.stringify({
                 action: 'scan',
                 qr_data: decodedText
             });
             
-            console.log('📤 Отправляем в бота:', payload);
+            addLog(`📤 Отправляем в бота: ${payload}`);
             
             try {
                 tg.sendData(payload);
-                document.getElementById('status').innerText = '📤 Данные отправлены боту...';
+                addLog('✅ Данные отправлены (sendData вызван)');
                 document.getElementById('restartBtn').style.display = 'block';
                 document.getElementById('torchBtn').style.display = 'none';
                 
@@ -153,14 +188,14 @@
                     tg.close();
                 }, 2000);
             } catch (e) {
-                document.getElementById('status').innerText = '❌ Ошибка отправки: ' + e;
+                addLog(`❌ Ошибка отправки: ${e}`);
                 console.error('Send data error:', e);
             }
         }
 
         // Ошибка сканирования (игнорируем)
         function onScanFailure(error) {
-            // Игнорируем ошибки - это нормально при поиске QR
+            // Игнорируем ошибки – это нормально при поиске QR
         }
 
         // Переключение подсветки
@@ -204,7 +239,7 @@
             tg.close();
         }
 
-        // Запуск при загрузке страницы
+        // Запуск при загрузке
         startScanner();
     </script>
 </body>
