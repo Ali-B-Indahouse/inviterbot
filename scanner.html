@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QR Сканер</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        #video-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1/1;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 3px solid rgba(0, 255, 0, 0.5);
+            border-radius: 10px;
+            pointer-events: none;
+        }
+        #overlay::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 70%;
+            border: 2px solid rgba(0, 255, 0, 0.3);
+            border-radius: 10px;
+        }
+        #status {
+            color: #fff;
+            font-size: 16px;
+            margin-top: 20px;
+            text-align: center;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 10px;
+            min-height: 60px;
+            max-width: 90%;
+        }
+        #status.loading {
+            color: #ffaa00;
+        }
+        #status.success {
+            color: #00ff00;
+        }
+        #status.error {
+            color: #ff4444;
+        }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button.secondary {
+            background: #f44336;
+        }
+        @media (max-width: 600px) {
+            #video-container {
+                max-width: 100%;
+                aspect-ratio: 1/1;
+            }
+            #status {
+                font-size: 14px;
+                padding: 8px 15px;
+            }
+            button {
+                padding: 12px 20px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container">
+        <video id="video" autoplay playsinline></video>
+        <div id="overlay"></div>
+    </div>
+    
+    <div id="status" class="loading">📸 Наведите камеру на QR-код...</div>
+    
+    <div id="controls">
+        <button onclick="restartScanner()">🔄 Повторить</button>
+        <button class="secondary" onclick="closeApp()">❌ Закрыть</button>
+    </div>
+
+    <script>
+        const Telegram = window.Telegram.WebApp;
+        const BOT_TOKEN = '8983296641:AAE0RnwlDvzp1QefKZAqmYtzJnKPrvwR-BA';
+        const CHAT_ID = '313194397';
+        
+        let stream = null;
+        let scanning = false;
+        
+        function updateStatus(text, type = 'loading') {
+            const status = document.getElementById('status');
+            status.textContent = text;
+            status.className = type;
+        }
+        
+        function sendViaHTTP(qrData) {
+            updateStatus('📤 Отправка данных...', 'loading');
+            
+            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: `/scan_result ${JSON.stringify({ qr_data: qrData })}`
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    updateStatus('✅ QR-код успешно отправлен!', 'success');
+                    setTimeout(() => Telegram.close(), 1500);
+                } else {
+                    updateStatus('❌ Ошибка отправки: ' + (data.description || 'неизвестная'), 'error');
+                }
+            })
+            .catch(error => {
+                updateStatus('❌ Ошибка: ' + error.message, 'error');
+            });
+        }
+        
+        async function startScanner() {
+            const video = document.getElementById('video');
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 640 },
+                        height: { ideal: 640 }
+                    }
+                });
+                video.srcObject = stream;
+                await video.play();
+                
+                updateStatus('📸 Сканирование...', 'loading');
+                scanning = true;
+                
+                const scanLoop = () => {
+                    if (!scanning) return;
+                    
+                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height);
+                        
+                        if (code) {
+                            const qrData = code.data;
+                            updateStatus(`✅ QR найден: ${qrData.substring(0, 30)}...`, 'success');
+                            
+                            // Останавливаем сканирование
+                            scanning = false;
+                            if (stream) {
+                                stream.getTracks().forEach(track => track.stop());
+                            }
+                            
+                            // Отправляем данные
+                            sendViaHTTP(qrData);
+                            return;
+                        }
+                    }
+                    requestAnimationFrame(scanLoop);
+                };
+                
+                scanLoop();
+            } catch (error) {
+                updateStatus('❌ Ошибка камеры: ' + error.message, 'error');
+                console.error('Ошибка:', error);
+            }
+        }
+        
+        function restartScanner() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            scanning = false;
+            updateStatus('🔄 Перезапуск...', 'loading');
+            setTimeout(() => startScanner(), 500);
+        }
+        
+        function closeApp() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            scanning = false;
+            Telegram.close();
+        }
+        
+        // Инициализация
+        Telegram.ready();
+        Telegram.expand(); // Растягиваем на весь экран
+        
+        // Запускаем сканер
+        setTimeout(startScanner, 500);
+        
+        // Обработка ошибок
+        window.onerror = function(msg, url, line, col, error) {
+            updateStatus('❌ Ошибка: ' + msg, 'error');
+            console.error('Ошибка:', msg, error);
+        };
+    </script>
+</body>
+</html>
