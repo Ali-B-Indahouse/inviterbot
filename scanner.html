@@ -201,13 +201,11 @@
                             const qrData = code.data;
                             updateStatus(`✅ QR найден: ${qrData.substring(0, 30)}...`, 'success');
                             
-                            // Останавливаем сканирование
                             scanning = false;
                             if (stream) {
                                 stream.getTracks().forEach(track => track.stop());
                             }
                             
-                            // Отправляем данные
                             sendViaHTTP(qrData);
                             return;
                         }
@@ -239,18 +237,9 @@
             Telegram.close();
         }
         
-        // Инициализация
         Telegram.ready();
-        Telegram.expand(); // Растягиваем на весь экран
-        
-        // Запускаем сканер
+        Telegram.expand();
         setTimeout(startScanner, 500);
-        
-        // Обработка ошибок
-        window.onerror = function(msg, url, line, col, error) {
-            updateStatus('❌ Ошибка: ' + msg, 'error');
-            console.error('Ошибка:', msg, error);
-        };
     </script>
 </body>
 </html>
