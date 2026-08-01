@@ -2,33 +2,84 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QR Сканер</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; margin: 0; padding: 20px; background: #1a1a1a; color: white; }
-        #reader { width: 100%; max-width: 400px; margin: 0 auto; }
-        .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; }
-        .btn-primary { background: #2481cc; color: white; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a1a;
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        h2 { text-align: center; margin-bottom: 20px; }
+        #reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            margin: 10px auto;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn:active { opacity: 0.7; }
         .btn-danger { background: #cc3333; color: white; }
-        #status { text-align: center; margin: 15px 0; font-size: 14px; color: #aaa; }
+        .btn-primary { background: #2481cc; color: white; }
+        .btn-secondary { background: #555; color: white; }
     </style>
 </head>
 <body>
-    <h2 style="text-align:center;">📸 QR Сканер</h2>
+    <h2>📸 QR Сканер</h2>
     <div id="reader"></div>
-    <div id="status">Запуск камеры...</div>
-    <button class="btn btn-danger" onclick="closeApp()">❌ Закрыть</button>
+    <div id="status">🔄 Запуск камеры...</div>
+    
+    <button class="btn btn-secondary" onclick="toggleTorch()" id="torchBtn" style="display:none;">
+        💡 Подсветка
+    </button>
+    <button class="btn btn-primary" onclick="restartScanner()" id="restartBtn" style="display:none;">
+        🔄 Сканировать ещё
+    </button>
+    <button class="btn btn-danger" onclick="closeApp()">
+        ❌ Закрыть
+    </button>
 
     <script>
+        // Инициализация Telegram WebApp
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
+        
+        // Устанавливаем тему
+        tg.setHeaderColor('#1a1a1a');
+        tg.setBackgroundColor('#1a1a1a');
 
         let html5QrCode = null;
         let isScanning = false;
+        let torchEnabled = false;
 
+        // Запуск сканера
         function startScanner() {
             document.getElementById('status').innerText = '🔄 Запуск камеры...';
             
@@ -41,29 +92,49 @@
                     
                     html5QrCode.start(
                         cameraId,
-                        { fps: 10, qrbox: { width: 250, height: 250 } },
-                        onScanSuccess
+                        { 
+                            fps: 10, 
+                            qrbox: { width: 250, height: 250 },
+                            aspectRatio: 1.0
+                        },
+                        onScanSuccess,
+                        onScanFailure
                     ).then(() => {
                         isScanning = true;
-                        document.getElementById('status').innerText = '📷 Наведите на QR-код';
+                        document.getElementById('status').innerText = '📷 Наведите камеру на QR-код';
+                        document.getElementById('torchBtn').style.display = 'block';
+                        document.getElementById('restartBtn').style.display = 'none';
                     }).catch(err => {
                         document.getElementById('status').innerText = '❌ Ошибка камеры: ' + err;
+                        console.error('Camera error:', err);
                     });
                 } else {
                     document.getElementById('status').innerText = '❌ Камера не найдена';
                 }
             }).catch(err => {
                 document.getElementById('status').innerText = '❌ ' + err;
+                console.error('Get cameras error:', err);
             });
         }
 
-        function onScanSuccess(decodedText) {
+        // Успешное сканирование
+        function onScanSuccess(decodedText, decodedResult) {
             if (!isScanning) return;
             isScanning = false;
             
+            console.log('✅ QR распознан:', decodedText);
             document.getElementById('status').innerText = '✅ Считано: ' + decodedText;
             
-            // 🔑 ОТПРАВКА ДАННЫХ В БОТА — САМОЕ ВАЖНОЕ!
+            // Останавливаем сканер
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    console.log('Сканер остановлен');
+                }).catch(err => {
+                    console.error('Ошибка остановки:', err);
+                });
+            }
+            
+            // 🔑 ОТПРАВКА ДАННЫХ В БОТА - САМОЕ ВАЖНОЕ!
             const payload = JSON.stringify({
                 action: 'scan',
                 qr_data: decodedText
@@ -74,20 +145,58 @@
             try {
                 tg.sendData(payload);
                 document.getElementById('status').innerText = '📤 Данные отправлены боту...';
+                document.getElementById('restartBtn').style.display = 'block';
+                document.getElementById('torchBtn').style.display = 'none';
                 
-                // Останавливаем сканер
-                if (html5QrCode && isScanning) {
-                    html5QrCode.stop().catch(e => console.error(e));
-                }
-                
-                // Закрываем Mini App через 1.5 сек
-                setTimeout(() => tg.close(), 1500);
+                // Закрываем через 2 секунды
+                setTimeout(() => {
+                    tg.close();
+                }, 2000);
             } catch (e) {
                 document.getElementById('status').innerText = '❌ Ошибка отправки: ' + e;
-                console.error(e);
+                console.error('Send data error:', e);
             }
         }
 
+        // Ошибка сканирования (игнорируем)
+        function onScanFailure(error) {
+            // Игнорируем ошибки - это нормально при поиске QR
+        }
+
+        // Переключение подсветки
+        function toggleTorch() {
+            if (!html5QrCode) return;
+            
+            torchEnabled = !torchEnabled;
+            const btn = document.getElementById('torchBtn');
+            
+            if (torchEnabled) {
+                html5QrCode.applyVideoConstraints({
+                    advanced: [{ torch: true }]
+                }).then(() => {
+                    btn.innerText = '💡 Выключить подсветку';
+                }).catch(err => {
+                    console.error('Torch error:', err);
+                    torchEnabled = false;
+                });
+            } else {
+                html5QrCode.applyVideoConstraints({
+                    advanced: [{ torch: false }]
+                }).then(() => {
+                    btn.innerText = '💡 Подсветка';
+                }).catch(err => {
+                    console.error('Torch error:', err);
+                });
+            }
+        }
+
+        // Перезапуск сканера
+        function restartScanner() {
+            document.getElementById('restartBtn').style.display = 'none';
+            startScanner();
+        }
+
+        // Закрытие приложения
         function closeApp() {
             if (html5QrCode && isScanning) {
                 html5QrCode.stop().catch(e => console.error(e));
@@ -95,7 +204,7 @@
             tg.close();
         }
 
-        // Запуск при загрузке
+        // Запуск при загрузке страницы
         startScanner();
     </script>
 </body>
