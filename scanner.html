@@ -16,13 +16,7 @@
             padding: 20px;
         }
         h2 { text-align: center; margin-bottom: 20px; }
-        #reader {
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
-            border-radius: 10px;
-            overflow: hidden;
-        }
+        #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 10px; overflow: hidden; }
         #status {
             text-align: center;
             margin: 20px 0;
@@ -69,15 +63,9 @@
     <div id="reader"></div>
     <div id="status">🔄 Запуск камеры...</div>
     
-    <button class="btn btn-secondary" onclick="toggleTorch()" id="torchBtn" style="display:none;">
-        💡 Подсветка
-    </button>
-    <button class="btn btn-primary" onclick="restartScanner()" id="restartBtn" style="display:none;">
-        🔄 Сканировать ещё
-    </button>
-    <button class="btn btn-danger" onclick="closeApp()">
-        ❌ Закрыть
-    </button>
+    <button class="btn btn-secondary" onclick="toggleTorch()" id="torchBtn" style="display:none;">💡 Подсветка</button>
+    <button class="btn btn-primary" onclick="restartScanner()" id="restartBtn" style="display:none;">🔄 Сканировать ещё</button>
+    <button class="btn btn-danger" onclick="closeApp()">❌ Закрыть</button>
 
     <div class="log-area" id="log"></div>
 
@@ -88,158 +76,134 @@
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
-        
-        // Устанавливаем тему
-        tg.setHeaderColor('#1a1a1a');
-        tg.setBackgroundColor('#1a1a1a');
 
-        // Логирование в статус и в лог-область
-        function addLog(msg, isStatus = true) {
+        // ============================================================
+        // 🔑 ПОЛУЧАЕМ ТОКЕН И CHAT_ID ИЗ URL (передаются ботом)
+        // ============================================================
+        const urlParams = new URLSearchParams(window.location.search);
+        const BOT_TOKEN = urlParams.get('token');
+        const CHAT_ID = urlParams.get('chat');
+
+        // Логирование
+        function addLog(msg) {
             console.log(msg);
             const logDiv = document.getElementById('log');
             logDiv.textContent += msg + '\n';
             logDiv.scrollTop = logDiv.scrollHeight;
-            if (isStatus) {
-                document.getElementById('status').innerText = msg;
-            }
+            document.getElementById('status').innerText = msg;
         }
 
+        if (!BOT_TOKEN || !CHAT_ID) {
+            addLog('❌ Ошибка: не получены параметры авторизации');
+            throw new Error('Missing token or chat_id');
+        }
+        addLog('✅ Параметры получены');
+
+        // ============================================================
+        // ОТПРАВКА ЧЕРЕЗ HTTP (безопасно, токен из URL)
+        // ============================================================
+        function sendViaHTTP(qrData) {
+            addLog('📤 Отправка через HTTP...');
+            const payload = {
+                chat_id: CHAT_ID,
+                text: `/scan_result ${JSON.stringify({ qr_data: qrData })}`
+            };
+
+            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    addLog('✅ Успешно отправлено!');
+                    setTimeout(() => tg.close(), 1500);
+                } else {
+                    addLog('❌ Ошибка: ' + data.description);
+                }
+            })
+            .catch(err => {
+                addLog('❌ Ошибка fetch: ' + err);
+            });
+        }
+
+        // ============================================================
+        // СКАНЕР QR
+        // ============================================================
         let html5QrCode = null;
         let isScanning = false;
         let torchEnabled = false;
 
-        // ============================================================
-        // ЗАПУСК СКАНЕРА
-        // ============================================================
         function startScanner() {
             addLog('🔄 Запуск камеры...');
-            
             html5QrCode = new Html5Qrcode("reader");
-            
             Html5Qrcode.getCameras().then(devices => {
                 if (devices && devices.length) {
-                    // Ищем заднюю камеру
                     const cameraId = devices.find(d => /back|rear|environment/i.test(d.label))?.id || devices[devices.length - 1].id;
-                    addLog(`📷 Используем камеру: ${cameraId}`);
-                    
+                    addLog(`📷 Камера: ${cameraId}`);
                     html5QrCode.start(
                         cameraId,
-                        { 
-                            fps: 10, 
-                            qrbox: { width: 250, height: 250 },
-                            aspectRatio: 1.0
-                        },
+                        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
                         onScanSuccess,
                         onScanFailure
                     ).then(() => {
                         isScanning = true;
-                        addLog('📷 Наведите камеру на QR-код');
+                        addLog('📷 Наведите на QR-код');
                         document.getElementById('torchBtn').style.display = 'block';
                         document.getElementById('restartBtn').style.display = 'none';
                     }).catch(err => {
                         addLog('❌ Ошибка камеры: ' + err);
-                        console.error('Camera error:', err);
                     });
                 } else {
                     addLog('❌ Камера не найдена');
                 }
             }).catch(err => {
                 addLog('❌ ' + err);
-                console.error('Get cameras error:', err);
             });
         }
 
-        // ============================================================
-        // УСПЕШНОЕ СКАНИРОВАНИЕ
-        // ============================================================
-        function onScanSuccess(decodedText, decodedResult) {
+        function onScanSuccess(decodedText) {
             if (!isScanning) return;
             isScanning = false;
-            
             addLog(`✅ QR распознан: ${decodedText}`);
-            
-            // Останавливаем сканер
             if (html5QrCode) {
-                html5QrCode.stop().then(() => {
-                    console.log('Сканер остановлен');
-                }).catch(err => {
-                    console.error('Ошибка остановки:', err);
-                });
+                html5QrCode.stop().catch(e => console.error(e));
             }
-            
-            // ============================================================
-            // 🔑 ОТПРАВКА ДАННЫХ В БОТА
-            // ============================================================
-            const payload = JSON.stringify({
-                action: 'scan',
-                qr_data: decodedText
-            });
-            
-            addLog(`📤 Отправляем в бота: ${payload}`);
-            
-            try {
-                tg.sendData(payload);
-                addLog('✅ Данные отправлены (sendData вызван)');
-                document.getElementById('restartBtn').style.display = 'block';
-                document.getElementById('torchBtn').style.display = 'none';
-                
-                // Закрываем через 2 секунды
-                setTimeout(() => {
-                    tg.close();
-                }, 2000);
-            } catch (e) {
-                addLog(`❌ Ошибка отправки: ${e}`);
-                console.error('Send data error:', e);
-            }
+            // Отправляем через HTTP
+            sendViaHTTP(decodedText);
+            document.getElementById('restartBtn').style.display = 'block';
+            document.getElementById('torchBtn').style.display = 'none';
         }
 
-        // Ошибка сканирования (игнорируем)
         function onScanFailure(error) {
-            // Игнорируем ошибки – это нормально при поиске QR
+            // игнорируем
         }
 
-        // Переключение подсветки
         function toggleTorch() {
             if (!html5QrCode) return;
-            
             torchEnabled = !torchEnabled;
             const btn = document.getElementById('torchBtn');
-            
-            if (torchEnabled) {
-                html5QrCode.applyVideoConstraints({
-                    advanced: [{ torch: true }]
-                }).then(() => {
-                    btn.innerText = '💡 Выключить подсветку';
-                }).catch(err => {
-                    console.error('Torch error:', err);
+            html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchEnabled }] })
+                .then(() => {
+                    btn.innerText = torchEnabled ? '💡 Выключить' : '💡 Подсветка';
+                })
+                .catch(() => {
                     torchEnabled = false;
                 });
-            } else {
-                html5QrCode.applyVideoConstraints({
-                    advanced: [{ torch: false }]
-                }).then(() => {
-                    btn.innerText = '💡 Подсветка';
-                }).catch(err => {
-                    console.error('Torch error:', err);
-                });
-            }
         }
 
-        // Перезапуск сканера
         function restartScanner() {
             document.getElementById('restartBtn').style.display = 'none';
             startScanner();
         }
 
-        // Закрытие приложения
         function closeApp() {
-            if (html5QrCode && isScanning) {
-                html5QrCode.stop().catch(e => console.error(e));
-            }
+            if (html5QrCode && isScanning) html5QrCode.stop().catch(e => console.error(e));
             tg.close();
         }
 
-        // Запуск при загрузке
+        // Запуск
         startScanner();
     </script>
 </body>
