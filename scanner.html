@@ -43,19 +43,8 @@
         .btn-danger { background: #cc3333; color: white; }
         .btn-primary { background: #2481cc; color: white; }
         .btn-secondary { background: #555; color: white; }
-        .log-area {
-            background: #0a0a0a;
-            color: #0f0;
-            font-family: monospace;
-            font-size: 12px;
-            padding: 10px;
-            border-radius: 8px;
-            max-height: 150px;
-            overflow-y: auto;
-            margin-top: 20px;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
+        .btn-success { background: #2e7d32; color: white; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -63,11 +52,15 @@
     <div id="reader"></div>
     <div id="status">🔄 Запуск камеры...</div>
     
-    <button class="btn btn-secondary" onclick="toggleTorch()" id="torchBtn" style="display:none;">💡 Подсветка</button>
-    <button class="btn btn-primary" onclick="restartScanner()" id="restartBtn" style="display:none;">🔄 Сканировать ещё</button>
-    <button class="btn btn-danger" onclick="closeApp()">❌ Закрыть</button>
-
-    <div class="log-area" id="log"></div>
+    <button class="btn btn-success hidden" id="confirmBtn" onclick="confirmScan()">
+        ✅ Подтвердить сканирование
+    </button>
+    <button class="btn btn-secondary" onclick="restartScanner()" id="restartBtn" style="display:none;">
+        🔄 Сканировать ещё
+    </button>
+    <button class="btn btn-danger" onclick="closeApp()">
+        ❌ Закрыть
+    </button>
 
     <script>
         // ============================================================
@@ -77,71 +70,45 @@
         tg.ready();
         tg.expand();
 
-        // ============================================================
-        // 🔑 ПОЛУЧАЕМ ТОКЕН И CHAT_ID ИЗ URL (передаются ботом)
-        // ============================================================
-        const urlParams = new URLSearchParams(window.location.search);
-        const BOT_TOKEN = urlParams.get('token');
-        const CHAT_ID = urlParams.get('chat');
+        let html5QrCode = null;
+        let isScanning = false;
+        let scannedData = null;
 
-        // Логирование
-        function addLog(msg) {
-            console.log(msg);
-            const logDiv = document.getElementById('log');
-            logDiv.textContent += msg + '\n';
-            logDiv.scrollTop = logDiv.scrollHeight;
-            document.getElementById('status').innerText = msg;
+        function updateStatus(text) {
+            document.getElementById('status').innerText = text;
         }
 
-        if (!BOT_TOKEN || !CHAT_ID) {
-            addLog('❌ Ошибка: не получены параметры авторизации');
-            throw new Error('Missing token or chat_id');
-        }
-        addLog('✅ Параметры получены');
-
         // ============================================================
-        // ОТПРАВКА ЧЕРЕЗ HTTP (безопасно, токен из URL)
+        // ОТПРАВКА ДАННЫХ ЧЕРЕЗ WebApp (по клику пользователя)
         // ============================================================
-        function sendViaHTTP(qrData) {
-            addLog('📤 Отправка через HTTP...');
-            const payload = {
-                chat_id: CHAT_ID,
-                text: `/scan_result ${JSON.stringify({ qr_data: qrData })}`
-            };
-
-            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.ok) {
-                    addLog('✅ Успешно отправлено!');
-                    setTimeout(() => tg.close(), 1500);
-                } else {
-                    addLog('❌ Ошибка: ' + data.description);
-                }
-            })
-            .catch(err => {
-                addLog('❌ Ошибка fetch: ' + err);
-            });
+        function confirmScan() {
+            if (!scannedData) {
+                updateStatus('❌ Нет данных для отправки');
+                return;
+            }
+            try {
+                tg.sendData(JSON.stringify({
+                    action: 'scan',
+                    qr_data: scannedData
+                }));
+                updateStatus('✅ Данные отправлены!');
+                document.getElementById('confirmBtn').classList.add('hidden');
+                setTimeout(() => tg.close(), 1000);
+            } catch (e) {
+                updateStatus('❌ Ошибка отправки: ' + e.message);
+                console.error(e);
+            }
         }
 
         // ============================================================
         // СКАНЕР QR
         // ============================================================
-        let html5QrCode = null;
-        let isScanning = false;
-        let torchEnabled = false;
-
         function startScanner() {
-            addLog('🔄 Запуск камеры...');
+            updateStatus('🔄 Запуск камеры...');
             html5QrCode = new Html5Qrcode("reader");
             Html5Qrcode.getCameras().then(devices => {
                 if (devices && devices.length) {
                     const cameraId = devices.find(d => /back|rear|environment/i.test(d.label))?.id || devices[devices.length - 1].id;
-                    addLog(`📷 Камера: ${cameraId}`);
                     html5QrCode.start(
                         cameraId,
                         { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
@@ -149,52 +116,39 @@
                         onScanFailure
                     ).then(() => {
                         isScanning = true;
-                        addLog('📷 Наведите на QR-код');
-                        document.getElementById('torchBtn').style.display = 'block';
+                        updateStatus('📷 Наведите на QR-код');
                         document.getElementById('restartBtn').style.display = 'none';
                     }).catch(err => {
-                        addLog('❌ Ошибка камеры: ' + err);
+                        updateStatus('❌ Ошибка камеры: ' + err);
                     });
                 } else {
-                    addLog('❌ Камера не найдена');
+                    updateStatus('❌ Камера не найдена');
                 }
             }).catch(err => {
-                addLog('❌ ' + err);
+                updateStatus('❌ ' + err);
             });
         }
 
         function onScanSuccess(decodedText) {
             if (!isScanning) return;
             isScanning = false;
-            addLog(`✅ QR распознан: ${decodedText}`);
+            scannedData = decodedText;
+            updateStatus('✅ QR найден! Нажмите "Подтвердить"');
+            document.getElementById('confirmBtn').classList.remove('hidden');
             if (html5QrCode) {
                 html5QrCode.stop().catch(e => console.error(e));
             }
-            // Отправляем через HTTP
-            sendViaHTTP(decodedText);
             document.getElementById('restartBtn').style.display = 'block';
-            document.getElementById('torchBtn').style.display = 'none';
         }
 
         function onScanFailure(error) {
             // игнорируем
         }
 
-        function toggleTorch() {
-            if (!html5QrCode) return;
-            torchEnabled = !torchEnabled;
-            const btn = document.getElementById('torchBtn');
-            html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchEnabled }] })
-                .then(() => {
-                    btn.innerText = torchEnabled ? '💡 Выключить' : '💡 Подсветка';
-                })
-                .catch(() => {
-                    torchEnabled = false;
-                });
-        }
-
         function restartScanner() {
             document.getElementById('restartBtn').style.display = 'none';
+            document.getElementById('confirmBtn').classList.add('hidden');
+            scannedData = null;
             startScanner();
         }
 
